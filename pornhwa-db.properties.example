@@ -1,0 +1,9 @@
+# The Pornhwa DB API key is a personal credential. This file is git-ignored.
+# Copy to `pornhwa-db.properties` in the project root and fill in your own key
+# from https://pornhwadb.com/profile?tab=settings&section=developer
+#
+# Resolution order in PornhwaDbParser.resolveApiKey:
+#   1. -Dpornhwadb.api.key=<key>
+#   2. PORNHWA_DB_API_KEY environment variable
+#   3. this file
+X-API-Key=

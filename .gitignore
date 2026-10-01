@@ -84,6 +84,10 @@ bin/
 
 src/test/resources/cookies.txt
 local.properties
+
+# Local API credentials for parsers (see PornhwaDbParser). Never commit.
+pornhwa-db.properties
+*.local.properties
 .kotlin/
 !/.idea/kotlin-statistics.xml
 
