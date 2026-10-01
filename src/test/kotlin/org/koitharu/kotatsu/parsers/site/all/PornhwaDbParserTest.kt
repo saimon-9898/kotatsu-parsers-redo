@@ -4,6 +4,7 @@ import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.koitharu.kotatsu.parsers.config.ConfigKey
 import org.koitharu.kotatsu.parsers.model.ContentRating
 import org.koitharu.kotatsu.parsers.model.ContentType
 import org.koitharu.kotatsu.parsers.model.MangaParserSource
@@ -268,6 +269,39 @@ internal class PornhwaDbParserTest {
 	}
 
 	@Test
+	fun `settings value wins over every fallback`(@TempDir dir: Path) {
+		val keyFile = File(dir.toFile(), PornhwaDbParser.KEY_FILE_NAME).apply {
+			writeText("${PornhwaDbParser.HEADER_API_KEY}=from-file")
+		}
+		val key = PornhwaDbParser.resolveApiKey(
+			configured = "from-settings",
+			systemProperties = { name -> if (name == PornhwaDbParser.PROPERTY_API_KEY) "from-sysprop" else null },
+			environment = { name -> if (name == PornhwaDbParser.ENV_API_KEY) "from-env" else null },
+			keyFile = keyFile,
+		)
+
+		assertEquals("from-settings", key)
+	}
+
+	@Test
+	fun `an empty settings value falls through to the next source`(@TempDir dir: Path) {
+		val key = PornhwaDbParser.resolveApiKey(
+			configured = "   ",
+			systemProperties = { null },
+			environment = { name -> if (name == PornhwaDbParser.ENV_API_KEY) "from-env" else null },
+			keyFile = File(dir.toFile(), PornhwaDbParser.KEY_FILE_NAME),
+		)
+
+		assertEquals("from-env", key)
+	}
+
+	@Test
+	fun `the in-app api key config has no default credential`() {
+		// A default here would be a credential compiled into the shipped binary.
+		assertEquals("", ConfigKey.ApiKey().defaultValue)
+	}
+
+	@Test
 	fun `environment is used when no system property is set`(@TempDir dir: Path) {
 		val key = PornhwaDbParser.resolveApiKey(
 			systemProperties = { null },
@@ -342,7 +376,7 @@ internal class PornhwaDbParserTest {
 	@Test
 	fun `the api key is sent as a request header`() {
 		val text = parserSource().readText()
-		val expected = ".add(HEADER_API_KEY, resolveApiKey())"
+		val expected = ".add(HEADER_API_KEY, resolveApiKey(config[apiKeyKey]))"
 
 		assertTrue(text.contains(expected)) {
 			"Expected the key to be attached as a ${PornhwaDbParser.HEADER_API_KEY} header"

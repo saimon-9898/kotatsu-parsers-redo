@@ -38,10 +38,11 @@ import java.util.Properties
  * ## API key
  *
  * The key is never hard-coded and never logged. It is resolved at request time by
- * [resolveApiKey] from, in order: the JVM system property `pornhwadb.api.key`, the environment
- * variable `PORNHWA_DB_API_KEY`, or a `pornhwa-db.properties` file in the working directory
- * (git-ignored, see `.gitignore`). With no key configured every request fails with 401, which
- * [api] reports as an explicit "rejected the API key" error rather than a generic failure.
+ * [resolveApiKey] from, in order: the value entered in Kotatsu's per-source settings, the JVM
+ * system property `pornhwadb.api.key`, the environment variable `PORNHWA_DB_API_KEY`, or a
+ * `pornhwa-db.properties` file in the working directory (git-ignored, see `.gitignore`). With no
+ * key configured every request fails with 401, which [api] reports as an explicit "rejected the
+ * API key" error rather than a generic failure.
  */
 @MangaSourceParser("PORNHWADB", "Pornhwa DB", "en", ContentType.HENTAI)
 internal class PornhwaDbParser(context: MangaLoaderContext) :
@@ -51,14 +52,24 @@ internal class PornhwaDbParser(context: MangaLoaderContext) :
 
 	override val userAgentKey = ConfigKey.UserAgent(USER_AGENT)
 
+	/**
+	 * The in-app credential field, shown under this source's settings.
+	 */
+	private val apiKeyKey = ConfigKey.ApiKey()
+
 	private val availableTags = suspendLazy { fetchTags() }
 
 	init {
 		setFirstPage(1)
 	}
 
+	override fun onCreateConfig(keys: MutableCollection<ConfigKey<*>>) {
+		super.onCreateConfig(keys)
+		keys.add(apiKeyKey)
+	}
+
 	override fun getRequestHeaders(): Headers = super.getRequestHeaders().newBuilder()
-		.add(HEADER_API_KEY, resolveApiKey())
+		.add(HEADER_API_KEY, resolveApiKey(config[apiKeyKey]))
 		.add("Accept", "application/json")
 		.build()
 
@@ -464,30 +475,34 @@ internal class PornhwaDbParser(context: MangaLoaderContext) :
 		 * Resolve the key without ever logging or embedding it. Split out from the request path
 		 * so tests can exercise the precedence rules directly.
 		 *
-		 * ponytail: three lookup sources, no settings UI - a source-level config screen for one
-		 * credential is more machinery than the key is worth here.
+		 * The in-app settings value comes first because that is how a real user supplies the key;
+		 * the remaining sources exist so the desktop test harness and CI can run the same parser
+		 * without a device. A blank value at any level falls through rather than sending an empty
+		 * header, so a half-filled settings field still authenticates via the fallback.
 		 */
 		internal fun resolveApiKey(
+			configured: String? = null,
 			systemProperties: (String) -> String? = System::getProperty,
 			environment: (String) -> String? = System::getenv,
 			keyFile: File = File(KEY_FILE_NAME),
-		): String = systemProperties(PROPERTY_API_KEY).isKey()
+		): String = configured.isKey()
+			?: systemProperties(PROPERTY_API_KEY).isKey()
 			?: environment(ENV_API_KEY).isKey()
 			?: keyFile.readKey()
 			?: ""
 
 		private fun String?.isKey(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 
-	/**
-	 * `X-API-Key=...` in a git-ignored properties file, for setups without env vars.
-	 */
-	private fun File.readKey(): String? {
-		if (!isFile) {
-			return null
+		/**
+		 * `X-API-Key=...` in a git-ignored properties file, for setups without env vars.
+		 */
+		private fun File.readKey(): String? {
+			if (!isFile) {
+				return null
+			}
+			return runCatching {
+				Properties().apply { inputStream().use(::load) }.getProperty(HEADER_API_KEY).isKey()
+			}.getOrNull()
 		}
-		return runCatching {
-			Properties().apply { inputStream().use(::load) }.getProperty(HEADER_API_KEY).isKey()
-		}.getOrNull()
-	}
 	}
 }

@@ -26,6 +26,16 @@ public sealed class ConfigKey<T>(
 		override val defaultValue: String,
 	) : ConfigKey<String>("user_agent")
 
+	/**
+	 * A secret credential, e.g. an API key, entered by the user and sent only as a request header.
+	 *
+	 * Deliberately has no usable default: parsers must resolve this at request time and fail with a
+	 * clear error when it is blank, so that a credential is never compiled into a binary.
+	 */
+	public class ApiKey(
+		override val defaultValue: String = "",
+	) : ConfigKey<String>("api_key")
+
 	public class SplitByTranslations(
 		override val defaultValue: Boolean,
 	) : ConfigKey<Boolean>("split_translations")
